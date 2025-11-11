@@ -14,16 +14,16 @@ const Header = () => {
           <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             Início
           </Link>
-          <Link to="/gerador" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            Gerador
-          </Link>
           <Link to="/como-funciona" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             Como Funciona
+          </Link>
+          <Link to="/planos" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+            Planos
           </Link>
         </nav>
 
         <div className="flex items-center gap-4">
-          <Link to="/gerador">
+          <Link to="/auth">
             <Button variant="accent" size="default">
               Começar Grátis
             </Button>

@@ -11,7 +11,7 @@ serve(async (req) => {
   }
 
   try {
-    const { profile, oldProposals, jobDescription } = await req.json();
+    const { profile, oldProposals, jobDescription, plan = "free" } = await req.json();
 
     if (!profile || !jobDescription) {
       return new Response(
@@ -28,37 +28,58 @@ serve(async (req) => {
       throw new Error('LOVABLE_API_KEY is not configured');
     }
 
-    // Build the prompt for the AI
-    let systemPrompt = `Você é um especialista em criar propostas comerciais para freelancers.
+    let systemPrompt = `Você é um assistente especializado em criar propostas comerciais persuasivas para freelancers.
+Sua tarefa é gerar uma proposta profissional, personalizada e convincente com base no perfil do freelancer e na descrição do job.
 
-Seu objetivo é criar uma proposta profissional, persuasiva e personalizada que:
-1. Demonstre entendimento profundo do projeto
-2. Destaque as qualificações relevantes do freelancer
-3. Mostre entusiasmo genuíno e profissionalismo
-4. Seja objetiva mas calorosa
-5. Termine com um call-to-action claro
+Diretrizes:
+- Seja direto e objetivo, mas também persuasivo
+- Destaque as competências relevantes do freelancer
+- Mostre compreensão do problema do cliente
+- Apresente uma solução clara
+- Use um tom profissional mas amigável
+- Não invente informações que não estão no perfil
+- Mantenha a proposta entre 200-300 palavras`;
 
-IMPORTANTE:
-- Use um tom profissional mas acessível
-- Seja específico sobre como o freelancer pode ajudar
-- Evite clichês genéricos
-- Mantenha a proposta concisa (200-300 palavras)
-- Use português brasileiro
-- NÃO inclua saudações como "Olá" ou "Prezado cliente" no início
-- Comece diretamente falando sobre o projeto`;
+    // Premium plan gets extra features
+    if (plan === "premium") {
+      systemPrompt += `
 
-    let userPrompt = `PERFIL DO FREELANCER:
+RECURSOS PREMIUM ATIVADOS:
+Além da proposta, você deve incluir:
+
+1. PLANO DE EXECUÇÃO DO PROJETO
+- Divida o projeto em etapas claras (3-5 fases)
+- Estime o tempo de cada etapa
+- Sugira marcos importantes (milestones)
+
+2. DICAS VALIOSAS
+- Tecnologias recomendadas e por quê
+- Possíveis desafios e como superá-los
+- Sugestões de melhorias além do pedido inicial
+- Boas práticas específicas para este tipo de projeto
+
+Formate assim:
+[PROPOSTA]
+(texto da proposta aqui)
+
+[PLANO DE EXECUÇÃO]
+(plano detalhado aqui)
+
+[DICAS VALIOSAS]
+(dicas e insights aqui)`;
+    }
+
+    const userPrompt = `
+Perfil do Freelancer:
 ${profile}
 
-${oldProposals ? `EXEMPLOS DE PROPOSTAS ANTERIORES (para aprender o estilo):
-${oldProposals}
+${oldProposals ? `Exemplos de propostas anteriores (para aprender o estilo):
+${oldProposals}` : ''}
 
-` : ''}DESCRIÇÃO DO JOB:
+Descrição do Job:
 ${jobDescription}
 
-Crie uma proposta comercial profissional para este projeto.`;
-
-    console.log('Calling Lovable AI Gateway...');
+Gere uma proposta comercial profissional e persuasiva para este job.`;
 
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
