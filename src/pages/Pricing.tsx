@@ -1,13 +1,83 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, Sparkles } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Check, Sparkles, Loader2, Settings } from "lucide-react";
+import { useSubscription } from "@/contexts/SubscriptionContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { STRIPE_PLANS } from "@/lib/stripe";
 
 const Pricing = () => {
+  const { plan, user, loading: subLoading } = useSubscription();
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [managingPortal, setManagingPortal] = useState(false);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  const handleSubscribe = async (planKey: 'starter' | 'premium') => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    setLoadingPlan(planKey);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { priceId: STRIPE_PLANS[planKey].price_id },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      }
+    } catch (error) {
+      console.error('Error creating checkout:', error);
+      toast({
+        title: "Erro ao processar pagamento",
+        description: "Ocorreu um erro. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    setManagingPortal(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('customer-portal');
+
+      if (error) throw error;
+
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      }
+    } catch (error) {
+      console.error('Error opening portal:', error);
+      toast({
+        title: "Erro ao abrir portal",
+        description: "Ocorreu um erro. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setManagingPortal(false);
+    }
+  };
+
   const plans = [
     {
+      key: 'free' as const,
       name: "Free",
       price: "R$ 0",
       description: "Para experimentar",
@@ -16,10 +86,11 @@ const Pricing = () => {
         "Geração básica de propostas",
         "Suporte por email",
       ],
-      cta: "Começar Grátis",
+      cta: "Plano Atual",
       variant: "outline" as const,
     },
     {
+      key: 'starter' as const,
       name: "Starter",
       price: "R$ 49,99",
       description: "Para freelancers ativos",
@@ -34,6 +105,7 @@ const Pricing = () => {
       popular: false,
     },
     {
+      key: 'premium' as const,
       name: "Premium",
       price: "R$ 99,99",
       description: "Para profissionais sérios",
@@ -71,50 +143,115 @@ const Pricing = () => {
         {/* Pricing Cards */}
         <section className="py-20">
           <div className="container mx-auto px-4">
-            <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-              {plans.map((plan) => (
-                <Card 
-                  key={plan.name}
-                  className={`relative ${plan.popular ? 'border-accent shadow-accent' : ''}`}
-                >
-                  {plan.popular && (
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                      <span className="bg-accent text-accent-foreground px-4 py-1 rounded-full text-sm font-semibold flex items-center gap-1">
-                        <Sparkles className="w-4 h-4" />
-                        Mais Popular
-                      </span>
-                    </div>
-                  )}
-                  
-                  <CardHeader>
-                    <CardTitle className="text-2xl">{plan.name}</CardTitle>
-                    <CardDescription>{plan.description}</CardDescription>
-                    <div className="mt-4">
-                      <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-                      {plan.price !== "R$ 0" && (
-                        <span className="text-muted-foreground">/mês</span>
+            {plan !== 'free' && user && (
+              <div className="max-w-2xl mx-auto mb-8 text-center">
+                <Card className="bg-accent/5">
+                  <CardContent className="pt-6">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Você está no plano <strong className="text-accent">{plan.toUpperCase()}</strong>
+                    </p>
+                    <Button
+                      onClick={handleManageSubscription}
+                      disabled={managingPortal}
+                      variant="outline"
+                    >
+                      {managingPortal ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Abrindo...
+                        </>
+                      ) : (
+                        <>
+                          <Settings className="w-4 h-4" />
+                          Gerenciar Assinatura
+                        </>
                       )}
-                    </div>
-                  </CardHeader>
-
-                  <CardContent className="space-y-4">
-                    {plan.features.map((feature) => (
-                      <div key={feature} className="flex items-start gap-3">
-                        <Check className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
-                        <span className="text-muted-foreground">{feature}</span>
-                      </div>
-                    ))}
+                    </Button>
                   </CardContent>
-
-                  <CardFooter>
-                    <Link to="/auth" className="w-full">
-                      <Button variant={plan.variant} className="w-full" size="lg">
-                        {plan.cta}
-                      </Button>
-                    </Link>
-                  </CardFooter>
                 </Card>
-              ))}
+              </div>
+            )}
+
+            <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+              {plans.map((planItem) => {
+                const isCurrentPlan = planItem.key === plan;
+                
+                return (
+                  <Card 
+                    key={planItem.name}
+                    className={`relative ${planItem.popular ? 'border-accent shadow-accent' : ''} ${isCurrentPlan ? 'border-success' : ''}`}
+                  >
+                    {planItem.popular && (
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2">
+                        <span className="bg-accent text-accent-foreground px-4 py-1 rounded-full text-sm font-semibold flex items-center gap-1">
+                          <Sparkles className="w-4 h-4" />
+                          Mais Popular
+                        </span>
+                      </div>
+                    )}
+
+                    {isCurrentPlan && (
+                      <div className="absolute -top-4 right-4">
+                        <span className="bg-success text-white px-4 py-1 rounded-full text-sm font-semibold">
+                          Seu Plano
+                        </span>
+                      </div>
+                    )}
+                    
+                    <CardHeader>
+                      <CardTitle className="text-2xl">{planItem.name}</CardTitle>
+                      <CardDescription>{planItem.description}</CardDescription>
+                      <div className="mt-4">
+                        <span className="text-4xl font-bold text-foreground">{planItem.price}</span>
+                        {planItem.price !== "R$ 0" && (
+                          <span className="text-muted-foreground">/mês</span>
+                        )}
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="space-y-4">
+                      {planItem.features.map((feature) => (
+                        <div key={feature} className="flex items-start gap-3">
+                          <Check className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
+                          <span className="text-muted-foreground">{feature}</span>
+                        </div>
+                      ))}
+                    </CardContent>
+
+                    <CardFooter>
+                      {planItem.key === 'free' ? (
+                        <Button 
+                          variant={isCurrentPlan ? "outline" : planItem.variant} 
+                          className="w-full" 
+                          size="lg"
+                          disabled={isCurrentPlan}
+                        >
+                          {isCurrentPlan ? "Plano Atual" : "Começar Grátis"}
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => handleSubscribe(planItem.key)}
+                          disabled={loadingPlan === planItem.key || isCurrentPlan || subLoading}
+                          variant={isCurrentPlan ? "outline" : planItem.variant}
+                          className="w-full"
+                          size="lg"
+                        >
+                          {loadingPlan === planItem.key ? (
+                            <>
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              Processando...
+                            </>
+                          ) : isCurrentPlan ? (
+                            "Plano Atual"
+                          ) : (
+                            planItem.cta
+                          )}
+                        </Button>
+                      )}
+                    </CardFooter>
+                  </Card>
+                );
+              })}
             </div>
           </div>
         </section>

@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Copy, Sparkles } from "lucide-react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { User, Session } from '@supabase/supabase-js';
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 const Generator = () => {
   const [profile, setProfile] = useState("");
@@ -16,56 +16,26 @@ const Generator = () => {
   const [jobDescription, setJobDescription] = useState("");
   const [generatedProposal, setGeneratedProposal] = useState("");
   const [loading, setLoading] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
-  const [userPlan, setUserPlan] = useState<string>("free");
   const [projectCount, setProjectCount] = useState(0);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { plan, user } = useSubscription();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        if (!session?.user) {
-          setTimeout(() => {
-            navigate("/auth");
-          }, 0);
-        }
-      }
-    );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (!session?.user) {
-        navigate("/auth");
-      } else {
-        fetchUserData(session.user.id);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
-
-  const fetchUserData = async (userId: string) => {
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('plan')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (subscription) {
-      setUserPlan(subscription.plan);
+    if (!user) {
+      navigate("/auth");
+    } else {
+      fetchProjectCount();
     }
+  }, [user, navigate]);
+
+  const fetchProjectCount = async () => {
+    if (!user) return;
 
     const { count } = await supabase
       .from('proposals')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', userId);
+      .eq('user_id', user.id);
 
     setProjectCount(count || 0);
   };
@@ -76,12 +46,13 @@ const Generator = () => {
       return;
     }
 
-    if (userPlan === "free" && projectCount >= 1) {
+    if (plan === "free" && projectCount >= 1) {
       toast({
         title: "Limite atingido",
         description: "No plano Free você tem direito a 1 projeto. Faça upgrade para continuar!",
         variant: "destructive",
       });
+      navigate("/planos");
       return;
     }
 
@@ -103,7 +74,7 @@ const Generator = () => {
           profile,
           oldProposals,
           jobDescription,
-          plan: userPlan,
+          plan,
         },
       });
 
@@ -120,7 +91,7 @@ const Generator = () => {
       });
 
       // Update project count
-      setProjectCount(projectCount + 1);
+      fetchProjectCount();
 
       toast({
         title: "Proposta gerada!",
@@ -164,8 +135,8 @@ const Generator = () => {
             </p>
             <div className="mt-4">
               <span className="text-sm text-muted-foreground">
-                Plano: <strong className="text-accent">{userPlan.toUpperCase()}</strong>
-                {userPlan === "free" && ` • Projetos: ${projectCount}/1`}
+                Plano: <strong className="text-accent">{plan.toUpperCase()}</strong>
+                {plan === "free" && ` • Projetos: ${projectCount}/1`}
               </span>
             </div>
           </div>
