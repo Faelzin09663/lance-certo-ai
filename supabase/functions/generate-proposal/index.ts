@@ -1,8 +1,42 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Input validation schema
+const validateInput = (data: any) => {
+  const errors: string[] = [];
+  
+  if (!data.profile || typeof data.profile !== 'string') {
+    errors.push('Profile is required and must be a string');
+  } else if (data.profile.trim().length < 10) {
+    errors.push('Profile must be at least 10 characters');
+  } else if (data.profile.length > 5000) {
+    errors.push('Profile must not exceed 5000 characters');
+  }
+  
+  if (data.oldProposals && typeof data.oldProposals !== 'string') {
+    errors.push('Old proposals must be a string');
+  } else if (data.oldProposals && data.oldProposals.length > 3000) {
+    errors.push('Old proposals must not exceed 3000 characters');
+  }
+  
+  if (!data.jobDescription || typeof data.jobDescription !== 'string') {
+    errors.push('Job description is required and must be a string');
+  } else if (data.jobDescription.trim().length < 10) {
+    errors.push('Job description must be at least 10 characters');
+  } else if (data.jobDescription.length > 5000) {
+    errors.push('Job description must not exceed 5000 characters');
+  }
+  
+  if (data.plan && !['free', 'starter', 'premium'].includes(data.plan)) {
+    errors.push('Plan must be one of: free, starter, premium');
+  }
+  
+  return errors;
 };
 
 serve(async (req) => {
@@ -11,17 +45,60 @@ serve(async (req) => {
   }
 
   try {
-    const { profile, oldProposals, jobDescription, plan = "free" } = await req.json();
-
-    if (!profile || !jobDescription) {
+    // Authenticate user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('No authorization header provided');
       return new Response(
-        JSON.stringify({ error: 'Profile and job description are required' }),
+        JSON.stringify({ error: 'Unauthorized' }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: authHeader },
+        },
+      }
+    );
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+
+    if (authError || !user) {
+      console.error('Authentication failed:', authError);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { 
+          status: 401, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    console.log('User authenticated:', user.id);
+
+    // Parse and validate input
+    const requestData = await req.json();
+    const validationErrors = validateInput(requestData);
+    
+    if (validationErrors.length > 0) {
+      console.error('Validation errors:', validationErrors);
+      return new Response(
+        JSON.stringify({ error: validationErrors.join('; ') }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
     }
+
+    const { profile, oldProposals, jobDescription, plan = "free" } = requestData;
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {

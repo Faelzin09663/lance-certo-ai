@@ -10,6 +10,10 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 
+const MAX_PROFILE_LENGTH = 5000;
+const MAX_OLD_PROPOSALS_LENGTH = 3000;
+const MAX_JOB_DESCRIPTION_LENGTH = 5000;
+
 const Generator = () => {
   const [profile, setProfile] = useState("");
   const [oldProposals, setOldProposals] = useState("");
@@ -56,10 +60,56 @@ const Generator = () => {
       return;
     }
 
+    // Input validation
     if (!profile.trim() || !jobDescription.trim()) {
       toast({
         title: "Campos obrigatórios",
         description: "Por favor, preencha seu perfil e a descrição do job.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (profile.trim().length < 10) {
+      toast({
+        title: "Perfil muito curto",
+        description: "O perfil deve ter pelo menos 10 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (jobDescription.trim().length < 10) {
+      toast({
+        title: "Descrição muito curta",
+        description: "A descrição do job deve ter pelo menos 10 caracteres.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (profile.length > MAX_PROFILE_LENGTH) {
+      toast({
+        title: "Perfil muito longo",
+        description: `O perfil não pode ter mais de ${MAX_PROFILE_LENGTH} caracteres.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (oldProposals.length > MAX_OLD_PROPOSALS_LENGTH) {
+      toast({
+        title: "Propostas antigas muito longas",
+        description: `As propostas antigas não podem ter mais de ${MAX_OLD_PROPOSALS_LENGTH} caracteres.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (jobDescription.length > MAX_JOB_DESCRIPTION_LENGTH) {
+      toast({
+        title: "Descrição muito longa",
+        description: `A descrição do job não pode ter mais de ${MAX_JOB_DESCRIPTION_LENGTH} caracteres.`,
         variant: "destructive",
       });
       return;
@@ -155,7 +205,11 @@ const Generator = () => {
                   value={profile}
                   onChange={(e) => setProfile(e.target.value)}
                   className="min-h-[150px]"
+                  maxLength={MAX_PROFILE_LENGTH}
                 />
+                <p className="text-xs text-muted-foreground mt-2">
+                  {profile.length}/{MAX_PROFILE_LENGTH} caracteres
+                </p>
               </CardContent>
             </Card>
 
@@ -172,7 +226,11 @@ const Generator = () => {
                   value={oldProposals}
                   onChange={(e) => setOldProposals(e.target.value)}
                   className="min-h-[120px]"
+                  maxLength={MAX_OLD_PROPOSALS_LENGTH}
                 />
+                <p className="text-xs text-muted-foreground mt-2">
+                  {oldProposals.length}/{MAX_OLD_PROPOSALS_LENGTH} caracteres
+                </p>
               </CardContent>
             </Card>
 
@@ -189,7 +247,11 @@ const Generator = () => {
                   value={jobDescription}
                   onChange={(e) => setJobDescription(e.target.value)}
                   className="min-h-[150px]"
+                  maxLength={MAX_JOB_DESCRIPTION_LENGTH}
                 />
+                <p className="text-xs text-muted-foreground">
+                  {jobDescription.length}/{MAX_JOB_DESCRIPTION_LENGTH} caracteres
+                </p>
                 <Button
                   onClick={handleGenerate}
                   disabled={loading}
